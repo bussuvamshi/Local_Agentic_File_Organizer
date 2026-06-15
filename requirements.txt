@@ -1,0 +1,38 @@
+# Local Agentic File Organizer (LAFO) Requirements
+# All dependencies are open-source and can run locally
+
+# Core dependencies
+langchain
+langchain-community
+langchain-huggingface
+langchain-google-genai
+langgraph
+
+# File monitoring
+watchdog
+
+# PDF processing
+pdfplumber
+
+# Document parsing
+python-docx
+
+# Image processing & OCR
+Pillow
+pytesseract
+
+# Vector database (local)
+faiss-cpu
+
+# LLM Communication
+requests
+
+# Data processing
+numpy
+
+# Embeddings (HuggingFace local models)
+sentence-transformers
+torch
+
+# Utilities
+python-dotenv
