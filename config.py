@@ -24,7 +24,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 DOWNLOADS_DIR = Path(os.path.expanduser("~/Downloads"))
 
 # Target root directory for organized documents
-TARGET_ROOT = Path(r"C:\Users\bussu\SCANNED DOCUMENTS")
+TARGET_ROOT = Path(r"C:\Users\bussu\Documents\vamshi\SCANNED DOCUMENTS")
 
 # Unsorted/Review folder for low-confidence matches
 UNSORTED_FOLDER = TARGET_ROOT / "Unsorted_Review"
