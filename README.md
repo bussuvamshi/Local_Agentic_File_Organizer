@@ -6,40 +6,66 @@ LAFO is a 100% private, local, AI-powered file organization system that automati
 
 **Key Features:**
 - ✅ **Completely Local** - No cloud uploads, no data transmission
-- ✅ **Semantic Intelligence** - Uses local LLMs to understand file content
+- ✅ **Parallel Document Processing (New in v1.2)** - Process multiple downloads concurrently using a thread pool
+- ✅ **GPU Auto-Detection (New in v1.2)** - Automatically utilizes your local GPU (CUDA) for embeddings when available
+- ✅ **Semantic Intelligence** - Uses local or cloud-based LLMs to understand file content
 - ✅ **Automatic Organization** - Monitors Downloads and routes files to appropriate folders
 - ✅ **Smart Renaming** - Generates readable filenames from document content
 - ✅ **Confidence Scoring** - Routes low-confidence files for manual review
-- ✅ **Duplicate Detection** - Prevents duplicate files in destination folders
-- ✅ **Execution Logging** - Tracks all operations for audit trail
+- ✅ **Duplicate Detection** - Prevents duplicate files in destination folders using size optimization and SHA-256 content hashes
+- ✅ **Execution Logging** - Thread-safe logging tracks all operations in a central audit trail
+- ✅ **Robust Windows Support** - Integrates watchdog monitor for browser rename events (`on_moved`) and bypasses Controlled Folder Access restrictions.
 
 ## Architecture
 
-### System Components
+### System & Thread Pool Architecture (v1.2)
+
+LAFO utilizes a multithreaded architecture. When the file monitor detects file creations or renames, instead of blocking the main thread, events are submitted to a thread pool for parallel execution.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   FILE MONITOR                          │
-│          (Watchdog - Downloads Folder)                  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│              TEXT EXTRACTOR                             │
-│  (PDF, Images, DOCX, HTML, TXT)                        │
-│  - pdfplumber for native PDFs                          │
-│  - pytesseract for OCR (scanned docs)                  │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│         VECTOR STORE (Directory Taxonomy)               │
-│  - FAISS local vector database                         │
-│  - HuggingFace embeddings (all-MiniLM-L6-v2)          │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
+                  ┌──────────────────────────────────────────┐
+                  │               WATCHDOG                   │
+                  │   Monitors Downloads Folder (on_moved)   │
+                  └────────────────────┬─────────────────────┘
+                                       │
+                                       ▼ (Submits task)
+                  ┌──────────────────────────────────────────┐
+                  │        THREAD POOL EXECUTOR              │
+                  │   Queues and processes tasks in parallel  │
+                  └──────┬────────────────────────────┬──────┘
+                         │                            │
+            (Thread 1)   ▼               (Thread 2)   ▼
+        ┌────────────────────────┐        ┌────────────────────────┐
+        │   TEXT EXTRACTION      │        │   TEXT EXTRACTION      │
+        │   (PDF / OCR fallback) │        │   (PDF / OCR fallback) │
+        └──────────┬─────────────┘        └──────────┬─────────────┘
+                   │                                 │
+                   ▼                                 ▼
+        ┌────────────────────────┐        ┌────────────────────────┐
+        │   VECTOR SEARCH        │        │   VECTOR SEARCH        │
+        │   (HuggingFace GPU/CPU)│        │   (HuggingFace GPU/CPU)│
+        └──────────┬─────────────┘        └──────────┬─────────────┘
+                   │                                 │
+                   ▼                                 ▼
+        ┌────────────────────────┐        ┌────────────────────────┐
+        │   SEMANTIC ROUTING     │        │   SEMANTIC ROUTING     │
+        │   (Gemini API/Ollama)  │        │   (Gemini API/Ollama)  │
+        └──────────┬─────────────┘        └──────────┬─────────────┘
+                   │                                 │
+                   ▼ (Sync File Operations)          ▼ (Sync File Operations)
+        ┌──────────────────────────────────────────────────────────┐
+        │                 FILESYSTEM LOCK                          │
+        │   - Thread-safe duplicate check (SHA-256)                │
+        │   - Atomic file move & rename                            │
+        │   - Thread-safe statistics updates & execution logs      │
+        └──────────────────────────────────────────────────────────┘
+```
+
+### Thread Safety and Concurrency Controls
+* **File System Operations Lock (`self.file_op_lock`):** Ensures that duplicate content checks and file moves do not clash when multiple threads try to write files to the same target folder at the same millisecond.
+* **Statistics Lock (`self.stats_lock`):** Synchronizes operations on global stats counters.
+* **Execution Log Lock (`self.lock`):** Serializes append operations to `execution.log` to prevent log interleaving or corruption.
+* **GPU Auto-Detection:** Automatically leverages PyTorch GPU (CUDA) resources for the embeddings model, falling back to CPU if GPU drivers or CUDA builds are unavailable.��─────────────────┐
 │          SEMANTIC ROUTING AGENT                         │
 │  - Local LLM (Llama 3 via Ollama)                      │
 │  - Classifies documents                                │
@@ -384,22 +410,6 @@ Agentic_File_Organizer/
 ├── lafo.log              # Debug log (auto-created)
 └── lafo_debug.log        # Detailed debug log (auto-created)
 ```
-
-## Comparison with Your Previous RAG App
-
-This LAFO system builds on concepts from your `My_rag_app_v2.py`:
-
-| Feature | RAG App v2 | LAFO |
-|---------|-----------|------|
-| **Purpose** | Answer IPL cricket queries | Organize documents |
-| **Vector Store** | FAISS | FAISS |
-| **Embeddings** | all-MiniLM-L6-v2 | all-MiniLM-L6-v2 |
-| **LLM** | Ollama (llama3:8b) | Ollama (llama3:8b) |
-| **File Monitoring** | None | Watchdog |
-| **Confidence Scoring** | N/A | ✅ Built-in |
-| **Duplicate Detection** | N/A | ✅ Content hash + filename |
-| **Manual Review Workflow** | N/A | ✅ Unsorted_Review folder |
-| **Local Processing** | ✅ 100% | ✅ 100% |
 
 ## Privacy & Security
 
