@@ -107,7 +107,7 @@ LAFO utilizes a multithreaded architecture. When the file monitor detects file c
      - Pull Llama 3 model: `ollama pull llama3:8b` (or another model like `mistral`)
 
 3. **Tesseract-OCR** (For image text extraction)
-   - Download installer from https://github.com/UB-Mannheim/tesseract/wiki
+   - Download installer from https://github.com/UB-Mannheim/tesseract/wiki or "https://sourceforge.net/projects/tesseract-ocr.mirror/files/latest/download"
    - Install to: `C:\Program Files\Tesseract-OCR\`
    - Update path in `config.py` if different
 
