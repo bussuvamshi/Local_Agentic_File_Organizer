@@ -97,16 +97,35 @@ LAFO utilizes a multithreaded architecture. When the file monitor detects file c
    - Download from https://python.org
    - Install with "Add Python to PATH"
 
-2. **Ollama** (Local LLM Runtime)
-   - Download from https://ollama.ai
-   - Install and run: `ollama serve`
-   - Pull Llama 3 model: `ollama pull llama3:8b`
-   - Or use Mistral: `ollama pull mistral`
+2. **LLM Provider (Choose One or Both):**
+   - **Option A: Google Gemini API (Cloud Option - Recommended for speed)**
+     - Get a free API Key from [Google AI Studio](https://aistudio.google.com/)
+     - Default model: `gemini-2.5-flash`
+   - **Option B: Ollama (Local LLM Runtime)**
+     - Download from https://ollama.ai
+     - Install and run: `ollama serve`
+     - Pull Llama 3 model: `ollama pull llama3:8b` (or another model like `mistral`)
 
 3. **Tesseract-OCR** (For image text extraction)
    - Download installer from https://github.com/UB-Mannheim/tesseract/wiki
    - Install to: `C:\Program Files\Tesseract-OCR\`
    - Update path in `config.py` if different
+
+## Environment Configuration
+
+Create a `.env` file in the project root directory and define the following variables:
+
+```ini
+# Choose 'gemini' or 'ollama'
+LLM_PROVIDER=gemini
+
+# If using Gemini, paste your API Key here:
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+
+# If using local Ollama (optional configuration):
+# OLLAMA_MODEL=llama3:8b
+```
 
 ## Installation
 
@@ -245,7 +264,9 @@ Files with confidence below this go to Unsorted_Review.
 
 #### Model Selection
 ```python
-OLLAMA_MODEL = "llama3:8b"  # Options: "mistral", "llama2", "neural-chat"
+LLM_PROVIDER = "gemini"            # Options: "gemini", "ollama"
+GEMINI_MODEL = "gemini-2.5-flash"  # Used if LLM_PROVIDER is "gemini"
+OLLAMA_MODEL = "llama3:8b"         # Used if LLM_PROVIDER is "ollama"
 ```
 
 #### Embedding Model
