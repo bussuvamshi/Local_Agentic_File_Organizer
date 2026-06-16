@@ -141,6 +141,9 @@ DEBOUNCE_TIME = 3  # seconds (wait before processing a file)
 # File modification stable time (how long to wait to ensure file is written completely)
 FILE_STABLE_TIME = 2  # seconds
 
+# Thread pool configuration for parallel processing
+MAX_WORKERS = int(os.getenv("MAX_WORKERS", "4"))
+
 # ============================================================================
 # EMBEDDING MODEL
 # ============================================================================

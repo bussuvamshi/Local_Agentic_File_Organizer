@@ -42,9 +42,14 @@ class VectorStoreManager:
     def load_embeddings(self):
         """Load the embedding model (downloads if necessary)."""
         try:
-            logger.info(f"Loading embeddings model: {EMBEDDING_MODEL}")
-            self.embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
-            logger.info("✅ Embeddings model loaded successfully")
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            logger.info(f"Loading embeddings model: {EMBEDDING_MODEL} (Device: {device})")
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name=EMBEDDING_MODEL,
+                model_kwargs={"device": device}
+            )
+            logger.info(f"✅ Embeddings model loaded successfully on {device}")
         except Exception as e:
             logger.error(f"❌ Failed to load embeddings: {str(e)}")
             raise

@@ -3,6 +3,7 @@ Execution Logging Module for LAFO
 Tracks all file operations and maintains execution logs.
 """
 import logging
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -25,6 +26,7 @@ class ExecutionLogger:
     def __init__(self):
         """Initialize the execution logger."""
         self.log_file = Path(EXECUTION_LOG)
+        self.lock = threading.Lock()
         self.setup_logging()
     
     def setup_logging(self):
@@ -87,8 +89,9 @@ class ExecutionLogger:
         
         # Write to log file
         try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
-                f.write(log_line + "\n")
+            with self.lock:
+                with open(self.log_file, "a", encoding="utf-8") as f:
+                    f.write(log_line + "\n")
         except Exception as e:
             logger.error(f"Failed to write to execution log: {str(e)}")
         
@@ -206,8 +209,9 @@ class ExecutionLogger:
             return "No execution log found"
         
         try:
-            with open(self.log_file, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            with self.lock:
+                with open(self.log_file, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
             
             if limit:
                 lines = lines[-limit:]
@@ -219,8 +223,9 @@ class ExecutionLogger:
     def clear_log(self):
         """Clear the execution log."""
         try:
-            if self.log_file.exists():
-                self.log_file.unlink()
-                logger.info("Execution log cleared")
+            with self.lock:
+                if self.log_file.exists():
+                    self.log_file.unlink()
+                    logger.info("Execution log cleared")
         except Exception as e:
             logger.error(f"Error clearing log: {str(e)}")

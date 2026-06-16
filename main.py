@@ -6,6 +6,8 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+import concurrent.futures
+import threading
 
 # Reconfigure standard output streams to handle unencodable characters on Windows console
 if hasattr(sys.stdout, "reconfigure"):
@@ -25,7 +27,8 @@ from config import (
     TARGET_ROOT,
     UNSORTED_FOLDER,
     CONFIDENCE_THRESHOLD,
-    VERBOSE_LOGGING
+    VERBOSE_LOGGING,
+    MAX_WORKERS
 )
 
 # Setup logging
@@ -66,6 +69,11 @@ class LAFOOrchestrator:
             "errors": 0,
             "manual_reviews": 0
         }
+        
+        # Thread pool and synchronization locks for parallel processing
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS)
+        self.stats_lock = threading.Lock()
+        self.file_op_lock = threading.Lock()
     
     def initialize(self) -> bool:
         """
@@ -101,7 +109,7 @@ class LAFOOrchestrator:
             
             # 4. Initialize file monitor
             logger.info("4️⃣  Initializing File Monitor...")
-            self.file_monitor = FileMonitor(self.process_file)
+            self.file_monitor = FileMonitor(self.enqueue_file_processing)
             if not self.file_monitor.start():
                 logger.error("Failed to start file monitor")
                 return False
@@ -109,8 +117,8 @@ class LAFOOrchestrator:
             
             logger.info("\n✅ LAFO Initialization Complete!")
             logger.info("=" * 70)
-            logger.info("📁 Monitoring:", DOWNLOADS_DIR)
-            logger.info("📂 Target Root:", TARGET_ROOT)
+            logger.info(f"📁 Monitoring: {DOWNLOADS_DIR}")
+            logger.info(f"📂 Target Root: {TARGET_ROOT}")
             logger.info("=" * 70 + "\n")
             
             return True
@@ -147,7 +155,16 @@ class LAFOOrchestrator:
         except Exception as e:
             logger.error(f"Directory verification error: {str(e)}")
             return False
-    
+    def enqueue_file_processing(self, file_path: str):
+        """
+        Enqueue a file for processing in the thread pool.
+        
+        Args:
+            file_path: Path to the file to process
+        """
+        logger.info(f"📥 Enqueuing file for parallel processing: {Path(file_path).name}")
+        self.executor.submit(self.process_file, file_path)
+
     def process_file(self, file_path: str):
         """
         Process a newly detected file.
@@ -161,7 +178,8 @@ class LAFOOrchestrator:
             logger.info(f"📄 Processing: {file_path.name}")
             logger.info(f"{'='*70}")
             
-            self.stats["files_processed"] += 1
+            with self.stats_lock:
+                self.stats["files_processed"] += 1
             
             # Step 1: Check if file is stable
             if not FileOperations.is_file_stable(str(file_path)):
@@ -171,7 +189,8 @@ class LAFOOrchestrator:
                     str(file_path.parent),
                     "File not stable"
                 )
-                self.stats["files_skipped"] += 1
+                with self.stats_lock:
+                    self.stats["files_skipped"] += 1
                 return
             
             # Step 2: Extract text content
@@ -185,7 +204,8 @@ class LAFOOrchestrator:
                     str(file_path.parent),
                     "Failed to extract text content"
                 )
-                self.stats["errors"] += 1
+                with self.stats_lock:
+                    self.stats["errors"] += 1
                 return
             
             logger.info(f"   ✅ Extracted {len(text_content)} characters")
@@ -199,7 +219,8 @@ class LAFOOrchestrator:
                     str(file_path.parent),
                     "No available categories in target directory"
                 )
-                self.stats["errors"] += 1
+                with self.stats_lock:
+                    self.stats["errors"] += 1
                 return
             
             # Step 4: Semantic routing
@@ -217,7 +238,8 @@ class LAFOOrchestrator:
                     str(file_path.parent),
                     "Classification failed"
                 )
-                self.stats["errors"] += 1
+                with self.stats_lock:
+                    self.stats["errors"] += 1
                 return
             
             # Validate classification
@@ -228,7 +250,8 @@ class LAFOOrchestrator:
                     str(file_path.parent),
                     "Classification validation failed"
                 )
-                self.stats["errors"] += 1
+                with self.stats_lock:
+                    self.stats["errors"] += 1
                 return
             
             # Log classification details
@@ -262,7 +285,8 @@ class LAFOOrchestrator:
                         f"Confidence below threshold: {reasoning}",
                         confidence
                     )
-                    self.stats["manual_reviews"] += 1
+                    with self.stats_lock:
+                        self.stats["manual_reviews"] += 1
                 else:
                     logger.error("Failed to move file to Unsorted_Review")
                     self.execution_logger.log_error(
@@ -270,58 +294,64 @@ class LAFOOrchestrator:
                         str(file_path.parent),
                         "Failed to move to Unsorted_Review"
                     )
-                    self.stats["errors"] += 1
+                    with self.stats_lock:
+                        self.stats["errors"] += 1
                 
                 return
             
-            # Step 6: Check for duplicates
-            target_folder = TARGET_ROOT / classification.get("category_folder")
-            
-            is_dup_content, existing_file = FileOperations.check_duplicate_content(
-                str(file_path),
-                str(target_folder)
-            )
-            
-            if is_dup_content:
-                logger.warning(f"⚠️  Duplicate content detected: {existing_file}")
-                self.execution_logger.log_skipped(
-                    file_path.name,
-                    str(file_path.parent),
-                    f"Duplicate content found: {Path(existing_file).name}"
+            # Step 6: Check for duplicates & Step 7: Move file
+            # Protect these operations to avoid parallel race conditions on target folder
+            with self.file_op_lock:
+                target_folder = TARGET_ROOT / classification.get("category_folder")
+                
+                is_dup_content, existing_file = FileOperations.check_duplicate_content(
+                    str(file_path),
+                    str(target_folder)
                 )
-                self.stats["files_skipped"] += 1
-                return
-            
-            # Step 7: Move file
-            logger.info(f"🚀 Moving file to target folder...")
-            success, new_file_path, message = FileOperations.move_file(
-                str(file_path),
-                str(target_folder),
-                new_filename
-            )
-            
-            if not success:
-                logger.error(f"Failed to move file: {message}")
-                self.execution_logger.log_error(
-                    file_path.name,
-                    str(file_path.parent),
-                    message
+                
+                if is_dup_content:
+                    logger.warning(f"⚠️  Duplicate content detected: {existing_file}")
+                    self.execution_logger.log_skipped(
+                        file_path.name,
+                        str(file_path.parent),
+                        f"Duplicate content found: {Path(existing_file).name}"
+                    )
+                    with self.stats_lock:
+                        self.stats["files_skipped"] += 1
+                    return
+                
+                # Step 7: Move file
+                logger.info(f"🚀 Moving file to target folder...")
+                success, new_file_path, message = FileOperations.move_file(
+                    str(file_path),
+                    str(target_folder),
+                    new_filename
                 )
-                self.stats["errors"] += 1
-                return
-            
-            # Log success
-            relative_path = FileOperations.get_relative_path(str(target_folder))
-            self.execution_logger.log_success(
-                Path(new_file_path).name,
-                str(file_path.parent),
-                relative_path,
-                confidence
-            )
-            self.stats["files_moved"] += 1
-            
-            logger.info(f"✅ File organized successfully!")
-            logger.info(f"   Final path: {new_file_path}\n")
+                
+                if not success:
+                    logger.error(f"Failed to move file: {message}")
+                    self.execution_logger.log_error(
+                        file_path.name,
+                        str(file_path.parent),
+                        message
+                    )
+                    with self.stats_lock:
+                        self.stats["errors"] += 1
+                    return
+                
+                # Log success
+                relative_path = FileOperations.get_relative_path(str(target_folder))
+                self.execution_logger.log_success(
+                    Path(new_file_path).name,
+                    str(file_path.parent),
+                    relative_path,
+                    confidence
+                )
+                with self.stats_lock:
+                    self.stats["files_moved"] += 1
+                
+                logger.info(f"✅ File organized successfully!")
+                logger.info(f"   Final path: {new_file_path}\n")
         
         except Exception as e:
             logger.error(f"Error processing file: {str(e)}")
@@ -330,18 +360,21 @@ class LAFOOrchestrator:
                 str(file_path.parent) if 'file_path' in locals() else "unknown",
                 str(e)
             )
-            self.stats["errors"] += 1
+            with self.stats_lock:
+                self.stats["errors"] += 1
     
     def print_statistics(self):
         """Print processing statistics."""
+        with self.stats_lock:
+            stats_copy = self.stats.copy()
         logger.info("\n" + "=" * 70)
         logger.info("📊 LAFO Statistics")
         logger.info("=" * 70)
-        logger.info(f"Files Processed: {self.stats['files_processed']}")
-        logger.info(f"Files Moved: {self.stats['files_moved']}")
-        logger.info(f"Files Skipped: {self.stats['files_skipped']}")
-        logger.info(f"Manual Reviews: {self.stats['manual_reviews']}")
-        logger.info(f"Errors: {self.stats['errors']}")
+        logger.info(f"Files Processed: {stats_copy['files_processed']}")
+        logger.info(f"Files Moved: {stats_copy['files_moved']}")
+        logger.info(f"Files Skipped: {stats_copy['files_skipped']}")
+        logger.info(f"Manual Reviews: {stats_copy['manual_reviews']}")
+        logger.info(f"Errors: {stats_copy['errors']}")
         logger.info("=" * 70 + "\n")
     
     def run(self):
@@ -377,6 +410,12 @@ class LAFOOrchestrator:
         if self.file_monitor:
             self.file_monitor.stop()
         
+        logger.info("⏹️  Shutting down parallel processing thread pool...")
+        try:
+            self.executor.shutdown(wait=True)
+        except Exception as e:
+            logger.error(f"Error shutting down thread pool: {str(e)}")
+            
         self.print_statistics()
         logger.info("👋 LAFO stopped")
 
