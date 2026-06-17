@@ -3,13 +3,14 @@ Execution Logging Module for LAFO
 Tracks all file operations and maintains execution logs.
 """
 import logging
+import os
 import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
 from config import (
-    EXECUTION_LOG,
+    LOGS_DIR,
     LOG_FORMAT,
     LOG_STATUS_SUCCESS,
     LOG_STATUS_ERROR,
@@ -20,12 +21,50 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+class DynamicDateFileHandler(logging.FileHandler):
+    """
+    A file handler that dynamically determines the filename based on the current date
+    and rotates to a new file when the date changes.
+    """
+    def __init__(self, logs_dir: Path, suffix: str = "debug", encoding: Optional[str] = "utf-8"):
+        self.logs_dir = Path(logs_dir)
+        self.suffix = suffix
+        self.encoding = encoding
+        self.current_date = datetime.now().strftime("%Y-%m-%d")
+        
+        # Ensure directory exists
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Determine the initial file path
+        filename = f"{self.current_date}_{self.suffix}.log"
+        filepath = self.logs_dir / filename
+        
+        # Initialize base FileHandler
+        super().__init__(filepath, mode='a', encoding=self.encoding)
+        
+    def emit(self, record):
+        """Emit a record, rotating to a new file if the date has changed."""
+        try:
+            self.acquire()
+            today = datetime.now().strftime("%Y-%m-%d")
+            if today != self.current_date:
+                self.current_date = today
+                self.close()
+                filename = f"{self.current_date}_{self.suffix}.log"
+                self.baseFilename = os.path.abspath(self.logs_dir / filename)
+                self.stream = self._open()
+            logging.FileHandler.emit(self, record)
+        except Exception:
+            self.handleError(record)
+        finally:
+            self.release()
+
 class ExecutionLogger:
     """Manages execution logging for file operations."""
     
     def __init__(self):
         """Initialize the execution logger."""
-        self.log_file = Path(EXECUTION_LOG)
+        self.logs_dir = LOGS_DIR
         self.lock = threading.Lock()
         self.setup_logging()
     
@@ -34,16 +73,16 @@ class ExecutionLogger:
         try:
             root_logger = logging.getLogger()
             
-            # Check if we already have a FileHandler for lafo.log to avoid duplicates
-            has_lafo_handler = False
+            # Check if we already have a DynamicDateFileHandler to avoid duplicates
+            has_dynamic_handler = False
             for handler in root_logger.handlers:
-                if isinstance(handler, logging.FileHandler) and Path(handler.baseFilename).name == "lafo.log":
-                    has_lafo_handler = True
+                if isinstance(handler, DynamicDateFileHandler) and handler.suffix == "debug":
+                    has_dynamic_handler = True
                     break
             
-            if not has_lafo_handler:
+            if not has_dynamic_handler:
                 log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-                file_handler = logging.FileHandler("lafo.log", encoding="utf-8")
+                file_handler = DynamicDateFileHandler(self.logs_dir, "debug", encoding="utf-8")
                 file_handler.setFormatter(logging.Formatter(log_format))
                 file_handler.setLevel(logging.INFO if VERBOSE_LOGGING else logging.WARNING)
                 root_logger.addHandler(file_handler)
@@ -72,6 +111,7 @@ class ExecutionLogger:
             confidence_score: Confidence score for the operation (0-100)
         """
         timestamp = datetime.now().isoformat()
+        date_str = datetime.now().strftime("%Y-%m-%d")
         
         # Build log line
         log_line = LOG_FORMAT.format(
@@ -87,10 +127,20 @@ class ExecutionLogger:
         if confidence_score is not None:
             log_line += f" | Confidence: {confidence_score:.1f}%"
         
+        status_to_suffix = {
+            LOG_STATUS_SUCCESS: "info",
+            LOG_STATUS_ERROR: "error",
+            LOG_STATUS_SKIPPED: "skipped",
+            LOG_STATUS_MANUAL_REVIEW: "manual_review"
+        }
+        suffix = status_to_suffix.get(status, "info")
+        log_file = self.logs_dir / f"{date_str}_{suffix}.log"
+        
         # Write to log file
         try:
             with self.lock:
-                with open(self.log_file, "a", encoding="utf-8") as f:
+                self.logs_dir.mkdir(parents=True, exist_ok=True)
+                with open(log_file, "a", encoding="utf-8") as f:
                     f.write(log_line + "\n")
         except Exception as e:
             logger.error(f"Failed to write to execution log: {str(e)}")
@@ -195,22 +245,33 @@ class ExecutionLogger:
             confidence_score=confidence_score
         )
     
-    def get_log_contents(self, limit: Optional[int] = None) -> str:
+    def get_log_contents(self, status: Optional[str] = None, limit: Optional[int] = None) -> str:
         """
-        Get the contents of the execution log.
+        Get the contents of today's execution log for a specific status or info log by default.
         
         Args:
+            status: Optional status to get logs for (SUCCESS, ERROR, SKIPPED, MANUAL_REVIEW)
             limit: Number of latest lines to return (None for all)
             
         Returns:
             Log file contents
         """
-        if not self.log_file.exists():
-            return "No execution log found"
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        status_to_suffix = {
+            LOG_STATUS_SUCCESS: "info",
+            LOG_STATUS_ERROR: "error",
+            LOG_STATUS_SKIPPED: "skipped",
+            LOG_STATUS_MANUAL_REVIEW: "manual_review"
+        }
+        suffix = status_to_suffix.get(status, "info") if status else "info"
+        log_file = self.logs_dir / f"{date_str}_{suffix}.log"
+        
+        if not log_file.exists():
+            return f"No execution log found for today's {suffix} logs"
         
         try:
             with self.lock:
-                with open(self.log_file, "r", encoding="utf-8") as f:
+                with open(log_file, "r", encoding="utf-8") as f:
                     lines = f.readlines()
             
             if limit:
@@ -221,11 +282,14 @@ class ExecutionLogger:
             return f"Error reading log: {str(e)}"
     
     def clear_log(self):
-        """Clear the execution log."""
+        """Clear today's execution logs."""
         try:
             with self.lock:
-                if self.log_file.exists():
-                    self.log_file.unlink()
-                    logger.info("Execution log cleared")
+                date_str = datetime.now().strftime("%Y-%m-%d")
+                for suffix in ["info", "error", "skipped", "manual_review"]:
+                    log_file = self.logs_dir / f"{date_str}_{suffix}.log"
+                    if log_file.exists():
+                        log_file.unlink()
+                logger.info("Today's execution logs cleared")
         except Exception as e:
             logger.error(f"Error clearing log: {str(e)}")

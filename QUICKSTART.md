@@ -11,7 +11,7 @@
 ### 2. Install & Configure
 ```bash
 # Navigate to project
-cd c:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer
+cd c:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)
 
 # Create virtual environment
 python -m venv venv
@@ -87,11 +87,15 @@ pip install pdfplumber
     ↓
 📖 Extract text (PDF/OCR/DOCX)
     ↓
-🧠 Local LLM analyzes content
+🔍 Search local FAISS Vector store (Directory Taxonomy + File Exemplars)
+    ↓
+⚡ Filter down to top 3-5 candidates (prevents LLM timeout)
+    ↓
+🧠 Local LLM analyzes content (with native JSON mode & retries)
     ↓
 ❓ High confidence (≥75%)?
-    ├─ YES → ✅ Move to appropriate folder with new name
-    └─ NO  → ⚠️  Move to Unsorted_Review for manual review
+    ├─ YES → ✅ Move to appropriate folder with new name (after duplicate checks)
+    └─ NO  → ⚠️  Move to Unsorted_Review for manual review (quarantine fallback)
     ↓
 📊 Log to execution.log
 ```
@@ -102,14 +106,17 @@ pip install pdfplumber
 
 | File | Purpose |
 |------|---------|
-| `main.py` | Entry point - runs the orchestrator |
-| `config.py` | All configuration (paths, thresholds, models) |
-| `vector_store.py` | Manages directory taxonomy & semantic search |
-| `agent.py` | LLM-based document routing |
-| `file_monitor.py` | Watches Downloads folder |
-| `text_extractor.py` | Extracts text from any file type |
-| `file_operations.py` | Move, rename, duplicate detection |
-| `execution_logger.py` | Logs all operations |
+| `main.py` | Entry point - runs orchestrator and handles SingleInstance lock |
+| `config.py` | All configuration (paths, thresholds, candidates, model selection) |
+| `vector_store.py` | Manages directory taxonomy, indexes up to 15 exemplars per folder, FAISS DB |
+| `agent.py` | LLM-based document routing (Ollama/Gemini, native JSON formatting, retry loops) |
+| `file_monitor.py` | Watches Downloads folder and schedules files to parallel worker threads |
+| `text_extractor.py` | Extracts text from PDF, DOCX, TXT, HTML, and images (Tesseract OCR) |
+| `file_operations.py` | Move, rename, file stability, content duplicate checks (SHA-256) |
+| `execution_logger.py` | Logs all operations (thread-safe, daily rotating) |
+| `register_startup.ps1` | Registers LAFO to start silently as a Windows background task at logon |
+| `unregister_startup.ps1`| Stops running background LAFO daemons and removes Windows logon registration |
+
 
 ---
 

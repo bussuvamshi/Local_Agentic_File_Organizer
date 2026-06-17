@@ -12,16 +12,17 @@
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| **main.py** | Central orchestrator & entry point | 400+ |
-| **config.py** | Configuration, paths, and constants | 150+ |
-| **agent.py** | LLM-based semantic routing logic | 300+ |
-| **vector_store.py** | Directory taxonomy & vector DB management | 300+ |
-| **text_extractor.py** | Multi-format text extraction (PDF/OCR/DOCX) | 350+ |
-| **file_monitor.py** | Watchdog-based file monitoring | 250+ |
-| **file_operations.py** | File moving, renaming, duplicate detection | 300+ |
-| **execution_logger.py** | Comprehensive execution logging system | 200+ |
+| **main.py** | Central orchestrator & entry point | 580+ |
+| **config.py** | Configuration, paths, and constants | 120+ |
+| **agent.py** | LLM-based semantic routing logic | 450+ |
+| **vector_store.py** | Directory taxonomy & vector DB management | 280+ |
+| **text_extractor.py** | Multi-format text extraction (PDF/OCR/DOCX) | 270+ |
+| **file_monitor.py** | Watchdog-based file monitoring | 280+ |
+| **file_operations.py** | File moving, renaming, duplicate detection | 260+ |
+| **execution_logger.py** | Comprehensive execution logging system | 290+ |
 
-**Total Implementation Code:** ~2,250 lines
+**Total Implementation Code:** ~2,575 lines
+
 
 ### Documentation Files
 
@@ -225,6 +226,32 @@ Update Statistics
 - [x] Log duplicate detection
 - [x] Smart counter for same-name files
 
+#### 4. Parallel Processing & Multithreading (v1.2) ✅
+- [x] Concurrency via ThreadPoolExecutor (max 4 workers)
+- [x] Thread-safe filesystem and stats locking
+- [x] Prevent race conditions on concurrent moves/logs
+
+#### 5. Windows Service & Startup Integration (v1.2) ✅
+- [x] PowerShell register/unregister scripts
+- [x] Silent background service creation via shortcut injection
+- [x] Process control and cleanup tools
+
+#### 6. Single Instance Prevention (v1.3) ✅
+- [x] Windows-specific locking using `msvcrt` on `lafo.lock`
+- [x] Instant detection and graceful exit for duplicate daemons
+- [x] File descriptor safety and auto-release on process stop
+
+#### 7. Vector Candidate Pre-Filtering (v1.3) ✅
+- [x] FAISS similarity search pre-filtering
+- [x] Narrow 302 categories down to top 3-5 candidates (`MAX_CANDIDATES`)
+- [x] Reduces LLM prompt context and prevents timeouts
+
+#### 8. Exemplar-Based Training (v1.3) ✅
+- [x] Scans target folders for up to 15 existing files as exemplars
+- [x] Indexes existing file patterns inside the local FAISS database
+- [x] Improves semantic similarity accuracy by learning from actual file paths
+
+
 ---
 
 ## 🚀 Technology Stack
@@ -348,7 +375,7 @@ Continuous monitoring:    Unlimited (real-time detection)
 ### Quick Start (5 minutes)
 ```bash
 # 1. Navigate to project
-cd c:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer
+cd c:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)
 
 # 2. Create virtual environment
 python -m venv venv
@@ -582,14 +609,14 @@ You now have a complete, production-ready, local AI file organization system!
 
 | Metric | Value |
 |--------|-------|
-| Core Implementation Code | 2,250+ lines |
-| Documentation | 2,000+ lines |
+| Core Implementation Code | 2,575 lines |
+| Documentation | 2,200+ lines |
 | Number of Modules | 8 |
-| Configuration Options | 30+ |
-| Test Scenarios | 20+ (documented) |
-| External Dependencies | 15+ |
-| Features Implemented | 30+ |
-| Error Handling Paths | 15+ |
+| Configuration Options | 35+ |
+| Test Scenarios | 25+ (documented) |
+| External Dependencies | 18+ |
+| Features Implemented | 40+ |
+| Error Handling Paths | 20+ |
 | Log Entry Types | 4 |
 | Documentation Files | 6 |
 
@@ -598,14 +625,26 @@ You now have a complete, production-ready, local AI file organization system!
 ## 📝 Version Information
 
 - **Project Name:** LAFO (Local Agentic File Organizer)
-- **Version:** 1.0 (Complete Implementation)
-- **Release Date:** 2024
-- **Status:** Production Ready ✅
+- **Version:** 1.3 (Production Release)
+- **Release Date:** June 2026
+- **Status:** Release Ready ✅
 - **Python Version:** 3.10+
 - **License:** Open Source (Bring Your Own Ollama)
+
+---
+
+## 📅 Version History
+
+| Version | Date | Highlights | Key Features |
+|---------|------|------------|--------------|
+| **v1.0** | Dec 2024 | Initial Release | Watchdog file monitoring, basic text extraction, local/cloud routing agent, atomic operations |
+| **v1.1** | Feb 2025 | LLM Reliability & JSON Stability | Native JSON Mode (`"format": "json"`), 3x LLM response validation retry loops, cleaned system prompt syntax |
+| **v1.2** | Sep 2025 | Concurrency & Setup Automation | Multi-threaded ThreadPoolExecutor processing, thread-safe filesystem locks, CUDA GPU auto-detection for embeddings, Windows background service script installers (`register_startup.ps1`) |
+| **v1.3** | Jun 2026 | Enterprise Robustness & Scale | Single Instance lock protection via Windows `msvcrt`, FAISS Vector candidate pre-filtering to prevent Ollama timeout, Exemplar-based folder indexing (rebuild with up to 15 existing files per directory), quarantine routing to `Unsorted_Review` on failure |
 
 ---
 
 **Thank you for using LAFO! Happy organizing! 🚀**
 
 For questions or improvements, refer to the comprehensive documentation or examine the well-commented source code.
+

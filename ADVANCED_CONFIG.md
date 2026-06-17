@@ -298,7 +298,32 @@ VECTOR_SEARCH_K = 3  # instead of 5
 
 ## Vector Store Customization
 
+### Vector Candidate Pre-Filtering (New in v1.3)
+
+To prevent LLM CPU timeouts on large folder taxonomies (e.g. 302 categories), LAFO uses FAISS similarity search to pre-filter and narrow down the list of destination folders before invoking the LLM.
+
+Modify these parameters in `config.py`:
+```python
+# Maximum number of candidate folders to send to LLM for classification
+MAX_CANDIDATES = 3
+
+# Number of direct taxonomy matches retrieved from the FAISS database
+VECTOR_SEARCH_K = 5
+```
+
+- **How it works:** When a document is processed, its text is sent to the FAISS database using local embeddings. The database returns the top `VECTOR_SEARCH_K` nearest taxonomy or exemplar matches. The system extracts unique parent folder paths, resulting in a narrowed set of categories (capped at `MAX_CANDIDATES`), which are then passed to the LLM.
+- **Benefit:** Reduces the LLM's context size from >20,000 characters to <1,500 characters, resolving Ollama timeouts and increasing processing speed.
+
+### Exemplar-Based File Indexing (New in v1.3)
+
+LAFO's vector database does not just index folder names; it also indexes the files already stored in those folders to learn your manual naming conventions.
+
+- **Scanning exemplars:** On initialization/refresh, `VectorStoreManager` scans the subdirectories inside your target directory. For each subdirectory, it indexes the first **15 files** (excluding hidden files) as semantic "exemplars".
+- **Matching pattern:** If you drag a new file that has a similar naming pattern to existing files in a specific folder, the FAISS similarity search will match against those file exemplars, pointing the system to the correct parent folder.
+- **Configuration:** You can adjust the limit of exemplars per folder in `vector_store.py` (default: `15`).
+
 ### Rebuild Directory Taxonomy
+
 
 When you add/change folder structure:
 
@@ -449,7 +474,7 @@ Run LAFO automatically on startup:
 
 ```batch
 @echo off
-cd C:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer
+cd C:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)
 call venv\Scripts\activate.bat
 python main.py
 ```

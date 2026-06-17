@@ -121,20 +121,35 @@ Provide your classification in the exact JSON format requested.
             }
         ]
         
-        # Call LLM with retry logic
-        response_text = self._call_llm(messages)
+        # Call LLM and parse with retry logic on both network and parsing failures
+        for attempt in range(self.max_retries + 1):
+            if attempt > 0:
+                logger.info(f"🔄 Retrying classification (Attempt {attempt + 1}/{self.max_retries + 1})...")
+            
+            response_text = self._call_llm(messages)
+            
+            if not response_text:
+                if attempt < self.max_retries:
+                    import time
+                    time.sleep(RETRY_DELAY)
+                    continue
+                return None
+            
+            # Parse JSON response
+            try:
+                result = self._parse_json_response(response_text)
+                if result:
+                    return result
+            except Exception as e:
+                logger.error(f"Error parsing LLM response: {str(e)}")
+                logger.debug(f"Raw response: {response_text[:200]}...")
+            
+            if attempt < self.max_retries:
+                import time
+                time.sleep(RETRY_DELAY)
         
-        if not response_text:
-            return None
-        
-        # Parse JSON response
-        try:
-            result = self._parse_json_response(response_text)
-            return result
-        except Exception as e:
-            logger.error(f"Error parsing LLM response: {str(e)}")
-            logger.debug(f"Raw response: {response_text[:200]}...")
-            return None
+        logger.error(f"Failed to classify document after {self.max_retries + 1} attempts")
+        return None
     
     def _call_llm(self, messages: list, retry_count: int = 0) -> Optional[str]:
         """
@@ -221,6 +236,7 @@ Provide your classification in the exact JSON format requested.
                 "messages": messages,
                 "stream": False,
                 "temperature": 0.3,  # Low temperature for more deterministic output
+                "format": "json"
             }
             
             headers = {"Content-Type": "application/json"}
@@ -270,9 +286,82 @@ Provide your classification in the exact JSON format requested.
             logger.error(f"Error calling Ollama: {str(e)}")
             return None
     
+    @staticmethod
+    def _standardize_date(date_str: str) -> str:
+        """
+        Attempt to parse and standardize date string to YYYY-MM-DD.
+        If parsing fails, returns the original string.
+        """
+        date_str = date_str.strip()
+        formats = [
+            "%Y-%m-%d",
+            "%d-%m-%Y",
+            "%m-%d-%Y",
+            "%Y/%m/%d",
+            "%d/%m/%Y",
+            "%m/%d/%Y",
+            "%Y.%m.%d",
+            "%d.%m.%Y",
+            "%d %B, %Y",
+            "%d %b, %Y",
+            "%B %d, %Y",
+            "%b %d, %Y",
+            "%d %B %Y",
+            "%d %b %Y",
+            "%B %d %Y",
+            "%b %d %Y",
+            "%Y %B %d",
+            "%Y %b %d",
+        ]
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(date_str, fmt)
+                return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        # If it is just a year (e.g. "2026")
+        if len(date_str) == 4 and date_str.isdigit():
+            return f"{date_str}-01-01"
+        
+        return date_str
+
+    @staticmethod
+    def _clean_json_comments(json_str: str) -> str:
+        """
+        Strip line and trailing comments starting with // or # from a JSON string,
+        while preserving them if they occur inside double-quoted strings or URLs.
+        """
+        cleaned_lines = []
+        for line in json_str.splitlines():
+            comment_idx = -1
+            in_quote = False
+            i = 0
+            while i < len(line):
+                char = line[i]
+                if char == '"':
+                    # Ignore escaped quotes
+                    if i > 0 and line[i-1] == '\\':
+                        pass
+                    else:
+                        in_quote = not in_quote
+                elif not in_quote:
+                    if char == '#' or (char == '/' and i + 1 < len(line) and line[i+1] == '/'):
+                        prefix = line[:i]
+                        if not (prefix.endswith("http:") or prefix.endswith("https:")):
+                            comment_idx = i
+                            break
+                i += 1
+            
+            if comment_idx != -1:
+                cleaned_line = line[:comment_idx].rstrip()
+            else:
+                cleaned_line = line
+            cleaned_lines.append(cleaned_line)
+        return "\n".join(cleaned_lines)
+
     def _parse_json_response(self, response_text: str) -> Optional[Dict[str, Any]]:
         """
-        Parse JSON from LLM response (handles text wrapping and markdown).
+        Parse JSON from LLM response (handles text wrapping, surrounding conversation, and markdown).
         
         Args:
             response_text: Raw response from LLM
@@ -281,25 +370,32 @@ Provide your classification in the exact JSON format requested.
             Parsed dictionary or None
         """
         if not response_text or not response_text.strip():
-            logger.error("Empty response from Ollama - cannot parse JSON")
+            logger.error("Empty response from LLM - cannot parse JSON")
             return None
         
-        # Try to extract JSON from response (might be wrapped in markdown)
+        # Try to find the JSON block using '{' and '}'
+        # This is more robust against conversation surrounding the JSON block
         text = response_text.strip()
-        
-        # Remove markdown code blocks if present
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        
-        text = text.strip()
+        start_idx = text.find('{')
+        end_idx = text.rfind('}')
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            text = text[start_idx:end_idx + 1]
+        else:
+            # Fallback to removing markdown code blocks if present
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            text = text.strip()
         
         if not text:
-            logger.error("Response became empty after removing markdown")
+            logger.error("Response became empty after removing markdown / extraction")
             return None
+        
+        # Clean inline/line comments before parsing
+        text = self._clean_json_comments(text)
         
         try:
             # Parse JSON
@@ -314,6 +410,9 @@ Provide your classification in the exact JSON format requested.
             
             # Ensure confidence_score is numeric
             result["confidence_score"] = float(result["confidence_score"])
+            
+            # Standardize date format to YYYY-MM-DD
+            result["document_date"] = self._standardize_date(result["document_date"])
             
             return result
         except json.JSONDecodeError as e:

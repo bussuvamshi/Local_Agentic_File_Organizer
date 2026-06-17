@@ -5,16 +5,20 @@
 LAFO is a 100% private, local, AI-powered file organization system that automatically monitors your Windows Downloads folder, intelligently categorizes files, renames them semantically, and moves them to appropriate folders in your document structure.
 
 **Key Features:**
-- ✅ **Completely Local** - No cloud uploads, no data transmission
-- ✅ **Parallel Document Processing (New in v1.2)** - Process multiple downloads concurrently using a thread pool
-- ✅ **GPU Auto-Detection (New in v1.2)** - Automatically utilizes your local GPU (CUDA) for embeddings when available
-- ✅ **Semantic Intelligence** - Uses local or cloud-based LLMs to understand file content
-- ✅ **Automatic Organization** - Monitors Downloads and routes files to appropriate folders
-- ✅ **Smart Renaming** - Generates readable filenames from document content
-- ✅ **Confidence Scoring** - Routes low-confidence files for manual review
-- ✅ **Duplicate Detection** - Prevents duplicate files in destination folders using size optimization and SHA-256 content hashes
-- ✅ **Execution Logging** - Thread-safe logging tracks all operations in a central audit trail
-- ✅ **Robust Windows Support** - Integrates watchdog monitor for browser rename events (`on_moved`) and bypasses Controlled Folder Access restrictions.
+- ✅ **Completely Local** - No cloud uploads, no data transmission.
+- ✅ **Single-Instance Execution (New in v1.3)** - Prevents multiple background daemons from running concurrently using Windows `msvcrt` locks.
+- ✅ **Vector Pre-Filtering (New in v1.3)** - Similarity-filters categories down to the top 3-5 candidates (`MAX_CANDIDATES`) before LLM routing, preventing CPU-based timeouts on massive taxonomies.
+- ✅ **Exemplar-Based Indexing (New in v1.3)** - Scans and indexes up to 15 existing files in each category folder to learn naming and matching patterns.
+- ✅ **Robust Failure Quarantining (New in v1.3)** - Routes files failing classification after retries to `Unsorted_Review` to prevent downloads folder congestion.
+- ✅ **Parallel Document Processing (New in v1.2)** - Process multiple downloads concurrently using a thread pool.
+- ✅ **GPU Auto-Detection (New in v1.2)** - Automatically utilizes local GPU (CUDA) for embeddings when available.
+- ✅ **Semantic Intelligence** - Uses local (Ollama) or cloud-based (Gemini) LLMs to understand file content.
+- ✅ **Automatic Organization** - Monitors Downloads and routes files to appropriate folders.
+- ✅ **Smart Renaming** - Generates readable filenames from document content.
+- ✅ **Confidence Scoring** - Routes low-confidence files for manual review.
+- ✅ **Duplicate Detection** - Prevents duplicate files in destination folders using size optimization and SHA-256 content hashes.
+- ✅ **Execution Logging** - Thread-safe logging tracks all operations in a central audit trail.
+- ✅ **Robust Windows Support** - Integrates watchdog monitor for browser rename events (`on_moved`) and startup automation service scripts.
 
 ## Architecture
 
@@ -65,23 +69,15 @@ LAFO utilizes a multithreaded architecture. When the file monitor detects file c
 * **File System Operations Lock (`self.file_op_lock`):** Ensures that duplicate content checks and file moves do not clash when multiple threads try to write files to the same target folder at the same millisecond.
 * **Statistics Lock (`self.stats_lock`):** Synchronizes operations on global stats counters.
 * **Execution Log Lock (`self.lock`):** Serializes append operations to `execution.log` to prevent log interleaving or corruption.
-* **GPU Auto-Detection:** Automatically leverages PyTorch GPU (CUDA) resources for the embeddings model, falling back to CPU if GPU drivers or CUDA builds are unavailable.��─────────────────┐
-│          SEMANTIC ROUTING AGENT                         │
-│  - Local LLM (Llama 3 via Ollama)                      │
-│  - Classifies documents                                │
-│  - Extracts dates                                       │
-│  - Generates confidence scores                         │
-└────────────────────┬────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────┐
-│         FILE OPERATIONS & ROUTING                       │
-│  - Duplicate detection (content hash)                  │
-│  - Smart renaming                                       │
-│  - Move to destination or Unsorted_Review              │
-│  - Execution logging                                    │
-└─────────────────────────────────────────────────────────┘
-```
+* **GPU Auto-Detection:** Automatically leverages PyTorch GPU (CUDA) resources for the embeddings model, falling back to CPU if GPU drivers or CUDA builds are unavailable.
+
+### Version 1.3 Key Architectural Enhancements
+* **Single Instance Lock Protection (`SingleInstance`):** Uses Windows-specific `msvcrt` locks on a local lock file (`lafo.lock` in the logs directory) to instantly terminate any secondary instances of the LAFO process, preventing parallel directory polling race conditions.
+* **Vector Candidate Narrowing (`MAX_CANDIDATES`):** Similarity searches the local FAISS database first to identify the top 3-5 folder candidates (instead of passing all 302 categories to the LLM). This keeps the prompt context under 1.5KB, prevents Ollama timeouts, and significantly accelerates CPU-based LLM execution.
+* **Exemplar-Based File Indexing (`build_directory_taxonomy`):** Automatically indexes the first 15 files in each category directory as semantic "exemplars" in the FAISS database, training the system on user-established naming and content patterns.
+* **Robust JSON Handling & LLM Retry Loops (`classify_document`):** Features Native JSON Mode (`"format": "json"`) in the Ollama payload and retry loops (up to 3 attempts) for parsing/validation failures (e.g. missing `confidence_score` or malformed date fields).
+* **Quarantining Failures (`move_to_unsorted`):** Promotes absolute robustness by routing files that completely fail classification after all retries or validation checks directly to `Unsorted_Review` with a descriptive log entry, keeping the `Downloads` directory clean.
+
 
 ## Prerequisites
 
@@ -132,7 +128,7 @@ GEMINI_MODEL=gemini-2.5-flash
 ### 1. Clone/Copy the Project
 
 ```bash
-cd c:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer
+cd c:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)
 ```
 
 ### 2. Create Virtual Environment
@@ -282,6 +278,20 @@ DEBOUNCE_TIME = 3     # Seconds before processing
 WATCH_POLL_INTERVAL = 2  # Check frequency
 ```
 
+#### Vector Candidate Narrowing (New in v1.3)
+```python
+MAX_CANDIDATES = 3    # Maximum number of folders to send to LLM (narrowed via FAISS)
+VECTOR_SEARCH_K = 5   # Number of direct hits retrieved from FAISS
+MAX_TEXT_LENGTH = 1500 # Maximum characters of document text to send to LLM
+```
+
+#### Retry & Reliability (New in v1.1)
+```python
+MAX_RETRIES = 3       # LLM retries on JSON parsing / schema validation failures
+RETRY_DELAY = 2       # Seconds to wait between retries
+```
+
+
 ## Execution Log Format
 
 ```
@@ -412,7 +422,7 @@ if __name__ == "__main__":
 ## Project Structure
 
 ```
-Agentic_File_Organizer/
+Local_Agentic_File_Organizer_(LAFO)/
 ├── main.py                 # Orchestrator & entry point
 ├── config.py              # Configuration & constants
 ├── vector_store.py        # Vector DB management

@@ -72,11 +72,15 @@ class VectorStoreManager:
         # Get all subdirectories
         for folder_path in TARGET_ROOT.rglob("*"):
             if folder_path.is_dir() and folder_path != TARGET_ROOT:
+                # Skip the Unsorted_Review folder itself to avoid training on unsorted items
+                if folder_path.name == "Unsorted_Review":
+                    continue
+                    
                 folder_name = folder_path.name
                 relative_path = folder_path.relative_to(TARGET_ROOT)
                 relative_path_posix = relative_path.as_posix()
                 
-                # Create a semantic document for each folder
+                # Create a semantic document for the folder itself
                 doc_content = f"""
 Folder Category: {folder_name}
 Path: {relative_path_posix}
@@ -94,7 +98,39 @@ Category Name: {folder_name}
                     }
                 )
                 documents.append(doc)
-                logger.info(f"  📁 Added: {folder_name} ({relative_path_posix})")
+                logger.info(f"  📁 Added folder: {folder_name} ({relative_path_posix})")
+                
+                # Index files directly inside this subdirectory (up to 15 files) as exemplars
+                file_count = 0
+                for item in folder_path.glob("*"):
+                    if item.is_file():
+                        file_count += 1
+                        if file_count > 15:
+                            break
+                        
+                        file_name = item.name
+                        # Skip system/hidden files
+                        if file_name.startswith("."):
+                            continue
+                            
+                        file_doc_content = f"""
+File Name: {file_name}
+Category: {folder_name}
+Parent Path: {relative_path_posix}
+Example document for {folder_name}.
+"""
+                        file_doc = Document(
+                            page_content=file_doc_content.strip(),
+                            metadata={
+                                "folder_name": folder_name,
+                                "folder_path": relative_path_posix,
+                                "absolute_path": str(folder_path),
+                                "type": "file_exemplar",
+                                "filename": file_name
+                            }
+                        )
+                        documents.append(file_doc)
+                        logger.debug(f"    📄 Added file exemplar: {file_name}")
         
         if not documents:
             logger.warning("No subdirectories found in target root")

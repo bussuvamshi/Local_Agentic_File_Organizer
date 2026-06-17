@@ -24,7 +24,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 DOWNLOADS_DIR = Path(os.path.expanduser("~/Downloads"))
 
 # Target root directory for organized documents
-TARGET_ROOT = Path(r"C:\Users\bussu\Documents\vamshi\SCANNED DOCUMENTS")
+TARGET_ROOT = Path(r"C:\Users\bussu\Documents\vamshi")
 
 # Unsorted/Review folder for low-confidence matches
 UNSORTED_FOLDER = TARGET_ROOT / "Unsorted_Review"
@@ -33,8 +33,8 @@ UNSORTED_FOLDER = TARGET_ROOT / "Unsorted_Review"
 VECTORSTORE_DIR = "vectorstore"
 VECTORSTORE_METADATA = "directory_metadata.json"
 
-# Execution log
-EXECUTION_LOG = "execution.log"
+# Logs directory for daily rotating logs
+LOGS_DIR = Path(r"C:\Users\bussu\Documents\LAFO logs")
 
 # ============================================================================
 # OLLAMA CONFIGURATION
@@ -105,17 +105,19 @@ Folders: Vamshi, Bhagya Lasmi, Nanamma, Property documents, Vishnu, Kothapally, 
 
 Rules:
 1. Extract document/transaction date as YYYY-MM-DD. Fallback: file creation date.
-2. Confidence score is 0-100. If unsure, set < 75.
+2. Confidence score must be an integer between 0 and 100. If unsure, set < 75.
 3. Suggest a clean, concise filename.
 4. Reasoning must be a single short sentence.
 
-Format:
+You must respond with a single valid JSON object. Do not wrap the JSON in markdown code blocks or add any other text outside the JSON.
+
+Expected JSON format:
 {
-    "confidence_score": <0-100>,
-    "category_folder": "<folder name>",
-    "suggested_filename": "<filename>",
-    "document_date": "YYYY-MM-DD",
-    "reasoning": "<1-sentence reason>"
+    "confidence_score": 90,
+    "category_folder": "Vamshi",
+    "suggested_filename": "vamshi_pension_details.txt",
+    "document_date": "2026-06-17",
+    "reasoning": "Document contains pension details belonging to Vamshi."
 }
 """
 

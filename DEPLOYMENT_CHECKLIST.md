@@ -54,7 +54,7 @@
 ### Step 4: Project Setup
 - [ ] LAFO project folder created at:
   ```
-  c:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer\
+  c:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)\
   ```
 - [ ] All project files copied/created
 - [ ] requirements.txt present
@@ -62,7 +62,7 @@
 ### Step 5: Virtual Environment
 - [ ] Virtual environment created
   ```bash
-  cd c:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer\
+  cd c:\Users\bussu\MyPracticalsVScode\AI\Local_Agentic_File_Organizer_(LAFO)\
   python -m venv venv
   ```
 - [ ] Virtual environment activated
@@ -319,18 +319,23 @@ After processing 5-10 test files:
   - Monitor Terminal 2 for any errors
   - Check logs regularly
 
-- [ ] Set up Windows Task Scheduler (for auto-launch)
-  - [ ] Create batch file: `run_lafo.bat`
-    ```batch
-    @echo off
-    cd C:\Users\bussu\MyPracticalsVScode\AI\Agentic_File_Organizer
-    call venv\Scripts\activate.bat
-    python main.py
+- [ ] Register LAFO as a silent startup background service using the helper script:
+  - [ ] Open a PowerShell console.
+  - [ ] Run the registration script:
+    ```powershell
+    Set-ExecutionPolicy Bypass -Scope Process
+    .\register_startup.ps1
     ```
-  - [ ] Create Task Scheduler task
-    - [ ] Trigger: "On startup"
-    - [ ] Action: Run `run_lafo.bat`
-    - [ ] Run with highest privileges
+  - [ ] Confirm that the output reports success and that a shortcut `LAFO_Background_Organizer.lnk` is created in your Windows Startup directory.
+  - [ ] The script automatically starts LAFO silently in the background.
+
+- [ ] To stop and unregister the background service at any time:
+  - [ ] Run the unregistration script in PowerShell:
+    ```powershell
+    .\unregister_startup.ps1
+    ```
+  - [ ] This stops the active background processes and removes the logon shortcut.
+
 
 - [ ] Test reboot and auto-launch
   - [ ] Restart computer
@@ -528,11 +533,11 @@ If confidence scores are too low:
 - ✅ 10+ files processed successfully
 - ✅ Manual review rate < 10%
 - ✅ Error rate = 0%
-- ✅ Average processing time < 20 seconds
-- ✅ Windows Task Scheduler auto-launch works
+- ✅ Windows silent background service startup works
 - ✅ Folder structure handles expected file types
 - ✅ Daily monitoring routine established
 - ✅ Backup/recovery plan documented
+
 
 ---
 

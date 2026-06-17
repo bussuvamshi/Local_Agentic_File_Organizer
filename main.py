@@ -2,25 +2,124 @@
 Main Orchestrator for LAFO
 Coordinates all components to create a complete file organization system.
 """
+import io
 import logging
 import sys
+import os
 from pathlib import Path
 from typing import Optional
 import concurrent.futures
 import threading
 
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
+
+class SingleInstance:
+    """
+    Prevents multiple instances of the application from running simultaneously.
+    Uses Windows-specific file locking via msvcrt if available, otherwise acts as a no-op.
+    """
+    def __init__(self, lockfile_path: Path):
+        self.lockfile_path = Path(lockfile_path)
+        self.fd = None
+        self.is_locked = False
+
+    def acquire(self) -> bool:
+        if msvcrt is None:
+            return True
+        try:
+            self.lockfile_path.parent.mkdir(parents=True, exist_ok=True)
+            self.fd = os.open(self.lockfile_path, os.O_WRONLY | os.O_CREAT)
+            msvcrt.locking(self.fd, msvcrt.LK_NBLCK, 1)
+            self.is_locked = True
+            return True
+        except (OSError, IOError):
+            if self.fd is not None:
+                try:
+                    os.close(self.fd)
+                except Exception:
+                    pass
+                self.fd = None
+            return False
+
+    def release(self):
+        if self.fd is not None:
+            try:
+                if msvcrt is not None and self.is_locked:
+                    os.lseek(self.fd, 0, os.SEEK_SET)
+                    msvcrt.locking(self.fd, msvcrt.LK_UNLCK, 1)
+                os.close(self.fd)
+            except Exception:
+                pass
+            
+            try:
+                if self.lockfile_path.exists():
+                    os.remove(self.lockfile_path)
+            except Exception:
+                pass
+            
+            self.fd = None
+            self.is_locked = False
+
+
+# Prevent pythonw.exe None stream crashes and redirect them to a file for diagnostics
+class FileStream(io.IOBase):
+    def __init__(self, filepath):
+        self.filepath = filepath
+    def write(self, s):
+        try:
+            with open(self.filepath, "a", encoding="utf-8") as f:
+                f.write(s)
+        except Exception:
+            pass
+        return len(s)
+    def flush(self):
+        pass
+    def isatty(self):
+        return False
+
+try:
+    logs_dir = Path(r"C:\Users\bussu\Documents\LAFO logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    startup_log_path = logs_dir / "startup_error.log"
+    
+    if sys.stdout is None or sys.stdout.__class__.__name__ == 'NoneType':
+        sys.stdout = FileStream(startup_log_path)
+    if sys.stderr is None or sys.stderr.__class__.__name__ == 'NoneType':
+        sys.stderr = FileStream(startup_log_path)
+except Exception:
+    class DummyStream(io.IOBase):
+        def write(self, s):
+            return len(s)
+        def flush(self):
+            pass
+        def isatty(self):
+            return False
+    if sys.stdout is None:
+        sys.stdout = DummyStream()
+    if sys.stderr is None:
+        sys.stderr = DummyStream()
+
 # Reconfigure standard output streams to handle unencodable characters on Windows console
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(errors="replace")
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except Exception:
+        pass
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(errors="replace")
+    try:
+        sys.stderr.reconfigure(errors="replace")
+    except Exception:
+        pass
 
 from vector_store import VectorStoreManager
 from file_monitor import FileMonitor
 from text_extractor import TextExtractor
 from agent import RoutingAgent
 from file_operations import FileOperations
-from execution_logger import ExecutionLogger
+from execution_logger import ExecutionLogger, DynamicDateFileHandler
 
 from config import (
     DOWNLOADS_DIR,
@@ -28,7 +127,9 @@ from config import (
     UNSORTED_FOLDER,
     CONFIDENCE_THRESHOLD,
     VERBOSE_LOGGING,
-    MAX_WORKERS
+    MAX_WORKERS,
+    LOGS_DIR,
+    MAX_CANDIDATES
 )
 
 # Setup logging
@@ -36,9 +137,10 @@ logging.basicConfig(
     level=logging.INFO if VERBOSE_LOGGING else logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("lafo_debug.log", encoding="utf-8"),
+        DynamicDateFileHandler(LOGS_DIR, "debug", encoding="utf-8"),
         logging.StreamHandler()
-    ]
+    ],
+    force=True
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +190,7 @@ class LAFOOrchestrator:
             # 1. Initialize vector store
             logger.info("1️⃣  Initializing Vector Store...")
             self.vector_store = VectorStoreManager()
-            if not self.vector_store.initialize_vectorstore():
+            if not self.vector_store.initialize_vectorstore(force_rebuild=True):
                 logger.error("Failed to initialize vector store")
                 return False
             logger.info("   ✅ Vector store ready")
@@ -174,6 +276,12 @@ class LAFOOrchestrator:
         """
         try:
             file_path = Path(file_path)
+            
+            # Check if file still exists (it might have been renamed or deleted)
+            if not file_path.exists():
+                logger.info(f"ℹ️ File no longer exists, skipping processing: {file_path.name}")
+                return
+                
             logger.info(f"\n{'='*70}")
             logger.info(f"📄 Processing: {file_path.name}")
             logger.info(f"{'='*70}")
@@ -210,8 +318,22 @@ class LAFOOrchestrator:
             
             logger.info(f"   ✅ Extracted {len(text_content)} characters")
             
-            # Step 3: Get available categories
-            available_categories = self.vector_store.get_all_categories()
+            # Step 3: Search for candidate folders using vector similarity
+            logger.info("🔍 Searching for candidate folders...")
+            similar_folders = self.vector_store.search_similar_folders(text_content, k=MAX_CANDIDATES)
+            
+            if similar_folders:
+                available_categories = {
+                    folder_path: folder_name
+                    for folder_path, _, folder_name in similar_folders
+                }
+                logger.info(f"   Narrowed down to top {len(available_categories)} candidate folders:")
+                for fp, fn in available_categories.items():
+                    logger.info(f"     - {fn} ({fp})")
+            else:
+                logger.warning("Similarity search returned no folders. Falling back to all categories.")
+                available_categories = self.vector_store.get_all_categories()
+            
             if not available_categories:
                 logger.error("No categories available")
                 self.execution_logger.log_error(
@@ -232,26 +354,56 @@ class LAFOOrchestrator:
             )
             
             if not classification:
-                logger.error("Failed to classify document")
-                self.execution_logger.log_error(
-                    file_path.name,
-                    str(file_path.parent),
-                    "Classification failed"
+                logger.error("Failed to classify document after retries. Moving to Unsorted_Review...")
+                success, new_path = FileOperations.move_to_unsorted(
+                    str(file_path),
+                    "Classification failed (LLM timeout or parsing error)"
                 )
-                with self.stats_lock:
-                    self.stats["errors"] += 1
+                if success:
+                    self.execution_logger.log_manual_review(
+                        file_path.name,
+                        str(file_path.parent),
+                        "Classification failed (LLM timeout or parsing error)",
+                        0.0
+                    )
+                    with self.stats_lock:
+                        self.stats["manual_reviews"] += 1
+                else:
+                    logger.error("Failed to move file to Unsorted_Review")
+                    self.execution_logger.log_error(
+                        file_path.name,
+                        str(file_path.parent),
+                        "Classification failed and failed to move to Unsorted_Review"
+                    )
+                    with self.stats_lock:
+                        self.stats["errors"] += 1
                 return
             
             # Validate classification
             if not self.routing_agent.validate_classification(classification):
-                logger.error("Classification validation failed")
-                self.execution_logger.log_error(
-                    file_path.name,
-                    str(file_path.parent),
-                    "Classification validation failed"
+                logger.error("Classification validation failed. Moving to Unsorted_Review...")
+                success, new_path = FileOperations.move_to_unsorted(
+                    str(file_path),
+                    "Classification validation failed (Invalid schema values)"
                 )
-                with self.stats_lock:
-                    self.stats["errors"] += 1
+                if success:
+                    self.execution_logger.log_manual_review(
+                        file_path.name,
+                        str(file_path.parent),
+                        "Classification validation failed",
+                        0.0
+                    )
+                    with self.stats_lock:
+                        self.stats["manual_reviews"] += 1
+                else:
+                    logger.error("Failed to move file to Unsorted_Review")
+                    self.execution_logger.log_error(
+                        file_path.name,
+                        str(file_path.parent),
+                        "Classification validation failed and failed to move to Unsorted_Review"
+                    )
+                    with self.stats_lock:
+                        self.stats["errors"] += 1
                 return
             
             # Log classification details
@@ -302,6 +454,11 @@ class LAFOOrchestrator:
             # Step 6: Check for duplicates & Step 7: Move file
             # Protect these operations to avoid parallel race conditions on target folder
             with self.file_op_lock:
+                # Double check if file was renamed or deleted during the long LLM classification call
+                if not file_path.exists():
+                    logger.info(f"ℹ️ File no longer exists (likely renamed during classification): {file_path.name}")
+                    return
+                
                 target_folder = TARGET_ROOT / classification.get("category_folder")
                 
                 is_dup_content, existing_file = FileOperations.check_duplicate_content(
@@ -422,6 +579,13 @@ class LAFOOrchestrator:
 
 def main():
     """Main entry point."""
+    lock_path = LOGS_DIR / "lafo.lock"
+    instance_lock = SingleInstance(lock_path)
+    
+    if not instance_lock.acquire():
+        print("⚠️  Another instance of LAFO is already running. Exiting.", file=sys.stderr)
+        return 0
+        
     try:
         orchestrator = LAFOOrchestrator()
         success = orchestrator.run()
@@ -429,6 +593,8 @@ def main():
     except Exception as e:
         logger.error(f"Unhandled exception: {str(e)}")
         return 1
+    finally:
+        instance_lock.release()
 
 
 if __name__ == "__main__":

@@ -26,18 +26,22 @@ Both systems leverage local AI inference and vector databases for intelligent do
 ├──────────────────────┬──────────────────┬──────────────────────┤
 │ Component            │ RAG App v2       │ LAFO                 │
 ├──────────────────────┼──────────────────┼──────────────────────┤
-│ File Monitoring      │ ❌ None          │ ✅ Watchdog          │
-│ Vector Store         │ ✅ FAISS         │ ✅ FAISS             │
+│ File Monitoring      │ ❌ None          │ ✅ Watchdog (Polling)│
+│ Vector Store         │ ✅ FAISS         │ ✅ FAISS (Local)     │
 │ Embedding Model      │ ✅ all-MiniLM    │ ✅ all-MiniLM        │
 │ LLM (Ollama)         │ ✅ Llama 3:8b    │ ✅ Llama 3:8b        │
 │ Text Extraction      │ ⚠️ Simple        │ ✅ Advanced (OCR)    │
 │ Confidence Scoring   │ ❌ No            │ ✅ Yes (0-100%)      │
 │ Duplicate Detection  │ ❌ No            │ ✅ Content + Name    │
 │ File Operations      │ ❌ No            │ ✅ Move + Rename     │
-│ Execution Logging    │ ⚠️ Basic         │ ✅ Comprehensive     │
+│ Execution Logging    │ ⚠️ Basic         │ ✅ Thread-safe Logs  │
 │ Manual Review Flow   │ ⚠️ Chat-based    │ ✅ Folder-based      │
 │ Cloud Integration    │ ❌ None          │ ❌ None (100% local) │
+│ Single-Instance Lock │ ❌ No            │ ✅ Yes (msvcrt lock) │
+│ Vector Pre-Filtering │ ❌ No            │ ✅ Yes (Top 3-5 hit) │
+│ Exemplar Indexing    │ ❌ No            │ ✅ Yes (15/directory)│
 └──────────────────────┴──────────────────┴──────────────────────┘
+
 ```
 
 ---
@@ -235,24 +239,39 @@ Store in Session State
 ### LAFO Data Flow
 
 ```
-File Detection (Watchdog)
+Process Startup
     ↓
-Wait for File Stability
+SingleInstance Lock Check (via msvcrt on lafo.lock)
     ↓
-Text Extraction (PDF/OCR/etc)
+Watchdog Folder Polling
     ↓
-Vector Search (against folder taxonomy)
+New File Detected
     ↓
-LLM Classification
+Wait for File Stability (FILE_STABLE_TIME)
+    ↓
+Text Extraction (PDFplumber / Tesseract OCR / docx)
+    ↓
+Vector Candidate Narrowing (FAISS Similarity Search)
+    ├─ Match against Directory Taxonomy
+    └─ Match against File Exemplars (up to 15/folder)
+    ↓
+Filter Categories (Reduce to Top 3-5 Candidates)
+    ↓
+LLM Semantic Classification (with Native JSON Mode)
+    ├─ Retry Loop on JSON Parsing/Field Failures (3 Attempts)
+    └─ Fallback Routing to Unsorted_Review on Complete Failure
     ↓
 Decision Tree:
-    ├─ Confidence ≥ 75% → Check Duplicates → Move File
-    └─ Confidence < 75% → Move to Unsorted_Review
+    ├─ Confidence ≥ 75%? → Check Duplicate content (SHA-256)
+    │                         ├─ YES (Match) → Skip File
+    │                         └─ NO (Unique) → Atomic Move & Rename
+    └─ Confidence < 75%? → Quarantine Move to Unsorted_Review
     ↓
-Log Operation
+Log Operation (Thread-safe Execution Log)
     ↓
 Update Statistics
 ```
+
 
 ---
 

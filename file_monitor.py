@@ -146,8 +146,20 @@ class DownloadsEventHandler(FileSystemEventHandler):
         Returns:
             True if file is temporary
         """
+        import re
         filename = file_path.name.lower()
-        return any(filename.endswith(pattern) or filename.startswith(pattern) for pattern in TEMP_PATTERNS)
+        
+        # Check standard temp patterns
+        if any(filename.endswith(pattern) or filename.startswith(pattern) for pattern in TEMP_PATTERNS):
+            return True
+            
+        # Check if stem is a UUID (common for browser download temp files)
+        stem = file_path.stem
+        uuid_pattern = r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$'
+        if re.match(uuid_pattern, stem, re.IGNORECASE):
+            return True
+            
+        return False
     
     @staticmethod
     def _is_supported_file(file_path: Path) -> bool:
