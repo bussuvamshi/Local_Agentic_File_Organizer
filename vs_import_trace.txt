@@ -1,0 +1,6 @@
+Importing vector_store...
+Exception caught:
+Traceback (most recent call last):
+  File "C:\Users\bussu\.gemini\antigravity-ide\brain\7386f2a0-4c36-4df5-a9a3-ed14c58b4c09\scratch\test_import_vs.py", line 19, in <module>
+    import vector_store
+ModuleNotFoundError: No module named 'vector_store'

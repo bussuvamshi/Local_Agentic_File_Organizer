@@ -1,0 +1,5 @@
+Starting compiled imports test...
+Imported faiss
+Imported torch
+Imported HuggingFaceEmbeddings
+Imported FAISS from langchain_community

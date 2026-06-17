@@ -1,0 +1,11 @@
+1. Script started
+2. Redirection class defined
+3. stdout redirected
+4. stderr redirected
+5. Importing vector_store
+6. Importing file_monitor
+7. Importing agent
+8. Importing logging config
+9. Setup basicConfig
+10. basicConfig complete, logging starting message
+11. Log statement completed

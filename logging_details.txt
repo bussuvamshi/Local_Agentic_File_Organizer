@@ -1,0 +1,11 @@
+Root level: 20 (INFO is 20)
+Root handlers: [<DynamicDateFileHandler C:\Users\bussu\Documents\LAFO logs\2026-06-16_debug.log (NOTSET)>, <StreamHandler nul (NOTSET)>]
+  Handler: DynamicDateFileHandler, Level: 0
+    File: C:\Users\bussu\Documents\LAFO logs\2026-06-16_debug.log
+    Stream: <_io.TextIOWrapper name='C:\\Users\\bussu\\Documents\\LAFO logs\\2026-06-16_debug.log' mode='a' encoding='utf-8'>
+  Handler: StreamHandler, Level: 0
+    Stream: <_io.TextIOWrapper name='nul' mode='w' encoding='cp1252'>
+Logger level: 0
+Logger effective level: 20
+Logger propagate: True
+Log message sent

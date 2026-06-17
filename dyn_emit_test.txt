@@ -1,0 +1,24 @@
+CRASH: OSError: [Errno 9] Bad file descriptor
+Traceback (most recent call last):
+  File "C:\Users\bussu\AppData\Local\Programs\Python\Python314\Lib\logging\__init__.py", line 1229, in close
+    self.flush()
+    ~~~~~~~~~~^^
+  File "C:\Users\bussu\AppData\Local\Programs\Python\Python314\Lib\logging\__init__.py", line 1137, in flush
+    self.stream.flush()
+    ~~~~~~~~~~~~~~~~~^^
+OSError: [Errno 9] Bad file descriptor
+
+During handling of the above exception, another exception occurred:
+
+OSError: [Errno 9] Bad file descriptor
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\bussu\.gemini\antigravity-ide\brain\7386f2a0-4c36-4df5-a9a3-ed14c58b4c09\scratch\test_dyn_emit.py", line 46, in <module>
+    handler.close()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\bussu\AppData\Local\Programs\Python\Python314\Lib\logging\__init__.py", line 1234, in close
+    stream.close()
+    ~~~~~~~~~~~~^^
+OSError: [Errno 9] Bad file descriptor

@@ -1,0 +1,4 @@
+sys.stdout: None
+sys.stdout class: None
+sys.stderr: None
+sys.stderr class: None
