@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAFO - Local Agentic File Organizer Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.15);
+            --secondary: #c084fc;
+            --secondary-glow: rgba(192, 132, 252, 0.15);
+            --accent: #22c55e;
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --slide-transition-speed: 0.6s;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* Ambient Glow Backgrounds */
+        .ambient-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            filter: blur(150px);
+            z-index: -1;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+        .glow-1 {
+            background: var(--primary);
+            top: -10%;
+            left: -10%;
+        }
+        .glow-2 {
+            background: var(--secondary);
+            bottom: -10%;
+            right: -10%;
+        }
+
+        /* Presentation Header */
+        header {
+            padding: 24px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: -0.025em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .version {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Slides Container */
+        .slides-viewport {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .slide {
+            position: absolute;
+            width: 100%;
+            max-width: 1100px;
+            height: 100%;
+            max-height: 600px;
+            opacity: 0;
+            transform: translateX(100px) scale(0.95);
+            transition: all var(--slide-transition-speed) cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            z-index: 1;
+        }
+
+        .slide.active {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+            pointer-events: auto;
+            z-index: 2;
+        }
+
+        .slide.past {
+            opacity: 0;
+            transform: translateX(-100px) scale(0.95);
+        }
+
+        /* Card Layout styles */
+        .slide-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 48px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+        }
+
+        /* Slide Content */
+        .slide-title {
+            font-size: 2.75rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 24px;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #ffffff 60%, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .slide-body {
+            flex-grow: 1;
+            display: flex;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .slide-text {
+            flex: 1.2;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .slide-visual {
+            flex: 0.8;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            height: 100%;
+            min-height: 280px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+        }
+
+        /* Typographic elements */
+        p.subtitle {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        ul.points {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        ul.points li {
+            position: relative;
+            padding-left: 28px;
+            font-size: 1.05rem;
+            line-height: 1.5;
+        }
+
+        ul.points li::before {
+            content: "✦";
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+
+        ul.points li strong {
+            color: #ffffff;
+        }
+
+        .highlight-text {
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        /* Slide Specific Visualizers */
+        /* Slide 1 - Title slide override */
+        .slide-title-hero {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .slide-title-hero h1 {
+            font-size: 4.5rem;
+            font-weight: 900;
+            letter-spacing: -0.04em;
+            line-height: 1.0;
+            background: linear-gradient(135deg, #ffffff, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .slide-title-hero p {
+            font-size: 1.35rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .hero-badge {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 8px 16px;
+            border-radius: 99px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .hero-badge.active-badge {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: var(--primary-glow);
+        }
+
+        /* Architecture Flow Visualizer */
+        .flow-node {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px 16px;
+            width: 100%;
+            text-align: center;
+            font-size: 0.8rem;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .flow-node.active-node {
+            border-color: var(--primary);
+            background: var(--primary-glow);
+            color: #ffffff;
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .flow-arrow {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            margin: 4px 0;
+        }
+
+        /* Features Grid */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+
+        .feature-card {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            border-color: var(--secondary);
+            background: rgba(192, 132, 252, 0.05);
+        }
+
+        .feature-card h3 {
+            font-size: 1.15rem;
+            color: #ffffff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .feature-card h3::before {
+            content: "✓";
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        .feature-card p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Control Footer */
+        footer {
+            padding: 24px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            z-index: 10;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-muted);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.98);
+        }
+
+        .progress-bar-container {
+            flex-grow: 1;
+            max-width: 400px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            margin: 0 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 2px;
+            transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .slide-counter {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Code block style */
+        .code-box {
+            background: #060913;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            padding: 12px 18px;
+            width: 100%;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            color: var(--primary);
+            overflow-x: auto;
+        }
+
+        .code-box span.comment { color: #5c6370; }
+        .code-box span.keyword { color: #c678dd; }
+        .code-box span.string { color: #98c379; }
+        .code-box span.number { color: #d19a66; }
+
+        /* Animations for active slide elements */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide.active .slide-title {
+            animation: fadeInUp 0.5s ease 0.1s both;
+        }
+
+        .slide.active .slide-body {
+            animation: fadeInUp 0.5s ease 0.25s both;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Glow Objects -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+
+    <!-- Top Navigation Bar -->
+    <header>
+        <div class="logo">🚀 LAFO</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="hero-badge" style="padding: 4px 10px; font-size: 0.75rem;"><span style="color:var(--accent)">●</span> Background Daemon</div>
+            <div class="version">v1.3 Release</div>
+        </div>
+    </header>
+
+    <!-- Presentation Viewport -->
+    <main class="slides-viewport">
+
+        <!-- Slide 1: Cover Slide -->
+        <section class="slide active" id="slide-1">
+            <div class="slide-card" style="justify-content: center; align-items: center;">
+                <div class="slide-title-hero">
+                    <div class="hero-badge active-badge">LOCAL AGENTIC FILE ORGANIZER</div>
+                    <h1>LAFO</h1>
+                    <p>A 100% private, local, open-source AI solution that automatically monitors, categorizes, renames, and organizes your downloads.</p>
+                    <div class="hero-badges">
+                        <div class="hero-badge">🔒 100% Local Inference</div>
+                        <div class="hero-badge">🧠 FAISS Vector Search</div>
+                        <div class="hero-badge">🤖 Local Ollama (Llama 3)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 2: The Core Problem -->
+        <section class="slide" id="slide-2">
+            <div class="slide-card">
+                <h2 class="slide-title">The Clogged Downloads Problem</h2>
+                <div class="slide-body">
+                    <div class="slide-text">
+                        <p class="subtitle">Managing downloads and documents is a repetitive manual chore, plagued by three major bottlenecks:</p>
+                        <ul class="points">
+                            <li><strong>Unstructured Mess:</strong> The standard Downloads folder gets cluttered with mixed tax files, bank statements, medical reports, and bills.</li>
+                            <li><strong>Data Leakage Risk:</strong> Uploading sensitive personal papers (pension details, properties, IDs) to cloud organizers exposes private metadata.</li>
+                            <li><strong>Model Timeout/Failure:</strong> CPU-based local LLM systems often lock up or fail when processing heavy taxonomies with hundreds of potential folders.</li>
+                        </ul>
+                    </div>
+                    <div class="slide-visual">
+                        <div style="text-align: center; color: var(--secondary); font-size: 3rem; margin-bottom: 15px;">📥 ➔ 📁?</div>
+                        <div style="text-align: center; font-size: 0.9rem; color: var(--text-muted);">
+                            Manual sorting requires reading content, extracting dates, generating names, and sorting folders.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 3: The LAFO Solution -->
+        <section class="slide" id="slide-3">
+            <div class="slide-card">
+                <h2 class="slide-title">The Privacy-First Solution</h2>
+                <div class="slide-body">
+                    <div class="slide-text">
+                        <p class="subtitle">LAFO runs silently in the background, making autonomous, local routing decisions:</p>
+                        <ul class="points">
+                            <li><strong>Zero Cloud Exposure:</strong> 100% offline. Uses local HuggingFace embeddings and Llama 3 via local Ollama. No data ever leaves your computer.</li>
+                            <li><strong>Robust Background Daemon:</strong> Integrates Windows Watchdog observers (`on_moved`) to capture browser rename events instantly.</li>
+                            <li><strong>Smart Renaming & Deduplication:</strong> Standardizes naming patterns with dates, and matches SHA-256 hashes to prevent file duplicates.</li>
+                        </ul>
+                    </div>
+                    <div class="slide-visual" style="border-color: var(--secondary-glow);">
+                        <div style="color: var(--accent); font-size: 3rem; margin-bottom: 10px;">🛡️</div>
+                        <div style="font-weight: bold; margin-bottom: 5px; color: #ffffff;">Privacy Confirmed</div>
+                        <div style="text-align: center; font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
+                            • Local Text Extraction<br>
+                            • Local Vector Search<br>
+                            • Local Ollama Runtime
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 4: Data Flow Architecture -->
+        <section class="slide" id="slide-4">
+            <div class="slide-card">
+                <h2 class="slide-title">Data Flow Architecture</h2>
+                <div class="slide-body">
+                    <div class="slide-text">
+                        <p class="subtitle">LAFO leverages a structured, multi-threaded pipelines orchestration system:</p>
+                        <ul class="points">
+                            <li><strong>File Event Polling:</strong> Watchdog observes Downloads, triggers after files stabilize.</li>
+                            <li><strong>Candidate Pre-Filtering:</strong> FAISS searches directory taxonomy + file exemplars to select the top 3-5 folders.</li>
+                            <li><strong>Structured Agent:</strong> Ollama uses native JSON mode to classify documents, outputting date, filename, and confidence.</li>
+                        </ul>
+                    </div>
+                    <div class="slide-visual" style="min-height: 340px; display: flex; flex-direction: column; gap: 8px; justify-content: space-between;">
+                        <div class="flow-node active-node">1. Watchdog File Event</div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="flow-node">2. Text Extraction (PDF/OCR)</div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="flow-node">3. FAISS Search (Top 3 Candidates)</div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="flow-node">4. LLM Routing (Native JSON + Retries)</div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="flow-node">5. Safe Move & Deduplication</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 5: v1.3 Advanced Enhancements -->
+        <section class="slide" id="slide-5">
+            <div class="slide-card">
+                <h2 class="slide-title">New in Version 1.3</h2>
+                <div class="slide-body">
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <h3>Single-Instance Protection</h3>
+                            <p>Uses Windows-specific <code>msvcrt</code> file locks on <code>lafo.lock</code> to block duplicate orchestrator daemons, preventing polling race conditions.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>Candidate Pre-Filtering</h3>
+                            <p>Pre-filters 302 categories down to 3-5 candidates via FAISS, reducing LLM context window to 1.5KB to avoid Ollama CPU timeouts.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>Exemplar-Based Indexing</h3>
+                            <p>Indexes the first 15 files in target folders as exemplars in the FAISS database to automatically learn and match your established naming conventions.</p>
+                        </div>
+                        <div class="feature-card">
+                            <h3>Reliable Quarantining</h3>
+                            <p>Failed routing results are automatically moved to <code>Unsorted_Review</code>, preventing downloads directory congestion and infinite retry loops.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 6: Multi-threading & GPU -->
+        <section class="slide" id="slide-6">
+            <div class="slide-card">
+                <h2 class="slide-title">Multithreading & GPU Optimization</h2>
+                <div class="slide-body">
+                    <div class="slide-text">
+                        <p class="subtitle">System performance has been tuned to handle parallel ingestion and high-throughput workloads:</p>
+                        <ul class="points">
+                            <li><strong>ThreadPoolExecutor:</strong> Monitored files are dispatched to a background thread pool (max 4 workers) so browser downloads never freeze.</li>
+                            <li><strong>System Operations Lock:</strong> Critical filesystem transactions (duplicate checking, moving, logging) are serialized via thread locks.</li>
+                            <li><strong>CUDA Auto-Detection:</strong> Vector store embeddings leverage PyTorch GPU (CUDA) capabilities when available, falling back to CPU.</li>
+                        </ul>
+                    </div>
+                    <div class="slide-visual">
+                        <div class="code-box">
+<span class="comment"># Parallel execution flow in main.py</span>
+<span class="keyword">with</span> self.file_op_lock:
+    is_dup = check_duplicate_content(file)
+    <span class="keyword">if not</span> is_dup:
+        move_file(source, target_folder)
+
+<span class="comment"># GPU loading in vector_store.py</span>
+device = <span class="string">"cuda"</span> <span class="keyword">if</span> torch.cuda.is_available() <span class="keyword">else</span> <span class="string">"cpu"</span>
+self.embeddings = HuggingFaceEmbeddings(
+    model_name=EMBEDDING_MODEL,
+    model_kwargs={<span class="string">"device"</span>: device}
+)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 7: Automation & Setup -->
+        <section class="slide" id="slide-7">
+            <div class="slide-card">
+                <h2 class="slide-title">Service Automation & Deployment</h2>
+                <div class="slide-body">
+                    <div class="slide-text">
+                        <p class="subtitle">Setting up LAFO on Windows takes less than 5 minutes and runs completely silently:</p>
+                        <ul class="points">
+                            <li><strong>register_startup.ps1:</strong> Installs LAFO as a silent startup background process at user logon (injects shortcut in Startup folder).</li>
+                            <li><strong>unregister_startup.ps1:</strong> Safely terminates running background orchestrator instances and removes logon registrations.</li>
+                            <li><strong>Configurable Thresholds:</strong> Set confidence levels (default 75%) in <code>config.py</code>. Adjust model paths and OCR settings in seconds.</li>
+                        </ul>
+                    </div>
+                    <div class="slide-visual">
+                        <div style="font-weight: bold; margin-bottom: 10px; color: #ffffff;">Quick Installer</div>
+                        <div class="code-box" style="color: var(--secondary);">
+<span class="comment"># In PowerShell:</span>
+Set-ExecutionPolicy Bypass -Scope Process
+.\register_startup.ps1
+
+<span class="comment"># Verify logs in real-time:</span>
+Get-Content -Path execution.log -Tail 10 -Wait
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 8: Summary Metrics -->
+        <section class="slide" id="slide-8">
+            <div class="slide-card" style="justify-content: center; align-items: center;">
+                <div class="slide-title-hero" style="max-width: 900px;">
+                    <div style="font-size: 3.5rem; font-weight: 900; margin-bottom: 10px; background: linear-gradient(135deg, #ffffff, var(--primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Project Complete</div>
+                    <p style="margin-bottom: 30px;">LAFO is now release-ready on branch v1.3 with a production-grade codebase.</p>
+                    
+                    <div style="display: flex; gap: 40px; justify-content: center; width: 100%; max-width: 600px; margin-bottom: 30px;">
+                        <div style="text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary);">2,500+</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 5px;">Lines of Code</div>
+                        </div>
+                        <div style="border-left: 1px solid var(--border-color); height: 50px;"></div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--secondary);">100%</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 5px;">Local Privacy</div>
+                        </div>
+                        <div style="border-left: 1px solid var(--border-color); height: 50px;"></div>
+                        <div style="text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent);">&lt; 15s</div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 5px;">Routing Speed</div>
+                        </div>
+                    </div>
+
+                    <div class="hero-badge" style="background: rgba(34, 197, 94, 0.08); border-color: rgba(34, 197, 94, 0.2); color: var(--accent);">
+                        ✓ Ready for background task deployment on Windows 10/11
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Bottom Controls Footer -->
+    <footer>
+        <div class="nav-buttons">
+            <button class="nav-btn" id="prev-btn">◀ Prev</button>
+            <button class="nav-btn" id="next-btn">Next ▶</button>
+        </div>
+        
+        <div class="progress-bar-container">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div class="slide-counter" id="slide-counter">Slide 1 of 8</div>
+            <div class="hero-badge" style="font-size: 0.75rem; padding: 4px 8px; cursor: pointer;" id="key-guide">⌨ [Space / Arrows]</div>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const slides = document.querySelectorAll('.slide');
+            const prevBtn = document.getElementById('prev-btn');
+            const nextBtn = document.getElementById('next-btn');
+            const progressFill = document.getElementById('progress-fill');
+            const slideCounter = document.getElementById('slide-counter');
+            
+            let currentSlideIndex = 0;
+            const totalSlides = slides.length;
+
+            // Update slide visibility and controls
+            function updateSlides() {
+                slides.forEach((slide, index) => {
+                    slide.classList.remove('active', 'past');
+                    if (index === currentSlideIndex) {
+                        slide.classList.add('active');
+                    } else if (index < currentSlideIndex) {
+                        slide.classList.add('past');
+                    }
+                });
+
+                // Update progress bar
+                const progressPercent = ((currentSlideIndex + 1) / totalSlides) * 100;
+                progressFill.style.width = `${progressPercent}%`;
+
+                // Update counter text
+                slideCounter.textContent = `Slide ${currentSlideIndex + 1} of ${totalSlides}`;
+
+                // Update visualizer nodes if on Slide 4
+                if (currentSlideIndex === 3) {
+                    animateArchVisuals();
+                }
+            }
+
+            // Architecture Slide Auto-Highlight Animation
+            let archAnimInterval = null;
+            function animateArchVisuals() {
+                if (archAnimInterval) clearInterval(archAnimInterval);
+                
+                const nodes = document.querySelectorAll('#slide-4 .flow-node');
+                nodes.forEach(n => n.classList.remove('active-node'));
+                
+                let activeNodeIndex = 0;
+                nodes[activeNodeIndex].classList.add('active-node');
+
+                archAnimInterval = setInterval(() => {
+                    nodes[activeNodeIndex].classList.remove('active-node');
+                    activeNodeIndex = (activeNodeIndex + 1) % nodes.length;
+                    nodes[activeNodeIndex].classList.add('active-node');
+                }, 2000);
+            }
+
+            // Clean up intervals when changing slides
+            function changeSlide(direction) {
+                if (archAnimInterval) {
+                    clearInterval(archAnimInterval);
+                    archAnimInterval = null;
+                }
+
+                if (direction === 'next' && currentSlideIndex < totalSlides - 1) {
+                    currentSlideIndex++;
+                } else if (direction === 'prev' && currentSlideIndex > 0) {
+                    currentSlideIndex--;
+                }
+                updateSlides();
+            }
+
+            // Event Listeners
+            prevBtn.addEventListener('click', () => changeSlide('prev'));
+            nextBtn.addEventListener('click', () => changeSlide('next'));
+
+            // Keyboard Navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === 'Space' || e.key === 'Enter') {
+                    changeSlide('next');
+                } else if (e.key === 'ArrowLeft' || e.key === 'Backspace') {
+                    changeSlide('prev');
+                }
+            });
+
+            // Initialize presentation
+            updateSlides();
+        });
+    </script>
+</body>
+</html>
