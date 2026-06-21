@@ -473,11 +473,39 @@ class LAFOOrchestrator:
                             resolved_rel_path = path
                             break
                             
-                if not resolved_rel_path:
-                    # Fallback to LLM raw output
-                    resolved_rel_path = category_folder
-                    
-                target_folder = TARGET_ROOT / resolved_rel_path
+                # Determine final target folder path and verify it exists on disk
+                target_folder = None
+                if resolved_rel_path:
+                    potential_folder = TARGET_ROOT / resolved_rel_path
+                    if potential_folder.is_dir():
+                        target_folder = potential_folder
+                
+                # If target folder was not resolved or does not exist, move to Unsorted_Review
+                if not target_folder:
+                    logger.warning(f"⚠️ Target folder '{category_folder}' not identified properly or does not exist on disk. Moving to Unsorted_Review...")
+                    success, new_path = FileOperations.move_to_unsorted(
+                        str(file_path),
+                        f"Target folder '{category_folder}' not identified properly or does not exist"
+                    )
+                    if success:
+                        self.execution_logger.log_manual_review(
+                            file_path.name,
+                            str(file_path.parent),
+                            f"Target folder '{category_folder}' does not exist or not identified: {reasoning}",
+                            confidence
+                        )
+                        with self.stats_lock:
+                            self.stats["manual_reviews"] += 1
+                    else:
+                        logger.error("Failed to move file to Unsorted_Review")
+                        self.execution_logger.log_error(
+                            file_path.name,
+                            str(file_path.parent),
+                            "Failed to move to Unsorted_Review"
+                        )
+                        with self.stats_lock:
+                            self.stats["errors"] += 1
+                    return
                 
                 is_dup_content, existing_file = FileOperations.check_duplicate_content(
                     str(file_path),
