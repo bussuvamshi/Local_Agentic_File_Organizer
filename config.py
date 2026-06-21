@@ -98,28 +98,28 @@ MAX_TEXT_LENGTH = 1500
 
 # System prompt for the routing agent
 ROUTING_SYSTEM_PROMPT = """
-You are a personal document classifier. Match document content to one of the family folders.
+You are a personal document classifier. Match document content to one of the available category paths.
 Analyze content for names, IDs, phones, addresses, or emails to identify the person.
 
-Folders: Vamshi, Bhagya Lasmi, Nanamma, Property documents, Vishnu, Kothapally, Jagath Reddy
-
 Rules:
-1. Extract document/transaction date as YYYY-MM-DD. Fallback: file creation date.
-2. Confidence score must be an integer between 0 and 100. If unsure, set < 75.
-3. Suggest a clean, concise filename.
-4. Reasoning must be a single short sentence.
+1. Under "category_folder", you MUST output the exact path string provided in the AVAILABLE CATEGORIES list (e.g. "Vamshi" or "Vamshi/Pension" or "Property documents/Taxes"). Do not output just the base folder name if a nested path is given.
+2. Extract document/transaction date as YYYY-MM-DD. Fallback: file creation date.
+3. Confidence score must be an integer between 0 and 100. If unsure, set < 75.
+4. Suggest a clean, concise filename.
+5. Reasoning must be a single short sentence.
 
 You must respond with a single valid JSON object. Do not wrap the JSON in markdown code blocks or add any other text outside the JSON.
 
 Expected JSON format:
 {
     "confidence_score": 90,
-    "category_folder": "Vamshi",
+    "category_folder": "Vamshi/Pension",
     "suggested_filename": "vamshi_pension_details.txt",
-    "document_date": "2026-06-17",
+    "document_date": "2026-06-21",
     "reasoning": "Document contains pension details belonging to Vamshi."
 }
 """
+
 
 # ============================================================================
 # LOGGING CONFIGURATION

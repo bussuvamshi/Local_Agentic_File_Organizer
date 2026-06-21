@@ -409,7 +409,8 @@ class LAFOOrchestrator:
             # Log classification details
             confidence = classification.get("confidence_score", 0)
             category = classification.get("category_folder", "Unknown")
-            new_filename = classification.get("suggested_filename", file_path.name)
+            # Preserve original filename instead of renaming
+            new_filename = file_path.name
             doc_date = classification.get("document_date", "Unknown")
             reasoning = classification.get("reasoning", "")
             
@@ -459,7 +460,24 @@ class LAFOOrchestrator:
                     logger.info(f"ℹ️ File no longer exists (likely renamed during classification): {file_path.name}")
                     return
                 
-                target_folder = TARGET_ROOT / classification.get("category_folder")
+                category_folder = classification.get("category_folder", "")
+                
+                # Resolve target folder path from available_categories if possible
+                resolved_rel_path = None
+                if category_folder in available_categories:
+                    resolved_rel_path = category_folder
+                else:
+                    # Match base folder name case-insensitively
+                    for path, name in available_categories.items():
+                        if category_folder.lower() == name.lower() or Path(path).name.lower() == category_folder.lower():
+                            resolved_rel_path = path
+                            break
+                            
+                if not resolved_rel_path:
+                    # Fallback to LLM raw output
+                    resolved_rel_path = category_folder
+                    
+                target_folder = TARGET_ROOT / resolved_rel_path
                 
                 is_dup_content, existing_file = FileOperations.check_duplicate_content(
                     str(file_path),
